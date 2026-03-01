@@ -1,0 +1,30 @@
+# Variables de entorno (contienen tus credenciales secretas)
+.env
+
+# archivo headers.txt
+headers.txt
+
+# Archivo de autenticación de YouTube Music
+oauth.json
+browser.json
+
+# Cache de autenticación de Spotify
+.spotify_cache
+.cache
+
+# Archivos de debug/log generados
+debug_*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
