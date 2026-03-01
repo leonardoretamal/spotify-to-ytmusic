@@ -12,7 +12,12 @@ from .spotify_client import (
     obtener_info_playlist,
 )
 from .utils import formato_tiempo_estimado, guardar_canciones_no_encontradas
-from .youtube_client import buscar_en_youtube, conectar_youtube, crear_playlist_yt
+from .youtube_client import (
+    agregar_cancion_a_playlist,
+    buscar_en_youtube,
+    conectar_youtube,
+    crear_playlist_yt,
+)
 
 
 def migrar():
@@ -117,6 +122,7 @@ def migrar():
 
     canciones_encontradas = []
     canciones_no_encontradas = []
+    canciones_no_agregadas = []
     errores = []
 
     bar_format = (
@@ -141,14 +147,23 @@ def migrar():
                             barra.write(
                                 f"      +) Agregando a YT: {artista} - {nombre} (ID: {video_id})"
                             )
-
-                            ytmusic.add_playlist_items(
-                                playlistId=playlist_yt_id,
-                                videoIds=[video_id],
-                                duplicates=False,
+                            agregada_ok, motivo = agregar_cancion_a_playlist(
+                                ytmusic, playlist_yt_id, video_id
                             )
-                            canciones_encontradas.append(cancion)
-                            agregada = True
+                            if agregada_ok:
+                                canciones_encontradas.append(cancion)
+                                agregada = True
+                            else:
+                                cancion_con_motivo = {
+                                    **cancion,
+                                    "motivo": motivo or "YouTube no confirmo la insercion.",
+                                }
+                                canciones_no_agregadas.append(cancion_con_motivo)
+                                barra.write(
+                                    "      ⚠️ Encontrada pero no agregada: "
+                                    f"{artista} - {nombre} ({cancion_con_motivo['motivo']})"
+                                )
+                                break
                         else:
                             canciones_no_encontradas.append(cancion)
                             break
@@ -182,6 +197,7 @@ def migrar():
     print(f"  🎵 Total de canciones en Spotify:     {len(canciones)}")
     print(f"  ✅ Encontradas y agregadas a YouTube:  {len(canciones_encontradas)}")
     print(f"  ❌ No encontradas:                     {len(canciones_no_encontradas)}")
+    print(f"  ⚠️  Encontradas pero NO agregadas:     {len(canciones_no_agregadas)}")
     if errores:
         print(f"  ⚠️  Errores al agregar:                {len(errores)}")
     print()
@@ -192,8 +208,9 @@ def migrar():
     print()
     print("=" * 60)
 
-    if canciones_no_encontradas:
-        guardar_canciones_no_encontradas(canciones_no_encontradas)
+    pendientes = canciones_no_encontradas + canciones_no_agregadas
+    if pendientes:
+        guardar_canciones_no_encontradas(pendientes)
 
     if errores:
         with open("errores_migracion.txt", "w", encoding="utf-8") as f:

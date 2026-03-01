@@ -4,6 +4,9 @@
 # archivo headers.txt
 headers.txt
 
+# Canciones no encontradas.
+canciones_no_encontradas.txt
+
 # Archivo de autenticación de YouTube Music
 oauth.json
 browser.json
