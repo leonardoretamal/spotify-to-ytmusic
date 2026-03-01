@@ -70,6 +70,8 @@ def guardar_canciones_no_encontradas(
         for i, cancion in enumerate(canciones_fallidas, 1):
             f.write(f"{i:4d}. {cancion['artista']} — {cancion['nombre']}\n")
             f.write(f"      Álbum: {cancion['album']}\n\n")
+            if cancion.get("motivo"):
+                f.write(f"      Motivo: {cancion['motivo']}\n\n")
 
     print(f"\n📝 Lista de canciones no encontradas guardada en: {archivo}")
 

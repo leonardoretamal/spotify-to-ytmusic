@@ -155,3 +155,52 @@ def crear_playlist_yt(ytmusic, nombre_playlist_yt, desc_original):
     except Exception as e:
         print(f"❌ ERROR al crear la playlist en YouTube Music: {e}")
         sys.exit(1)
+
+
+def agregar_cancion_a_playlist(ytmusic, playlist_yt_id, video_id):
+    """
+    Agrega una cancion a una playlist y valida el resultado real de la API.
+
+    Retorna:
+      (ok: bool, motivo_error: str | None)
+    """
+    try:
+        respuesta = ytmusic.add_playlist_items(
+            playlistId=playlist_yt_id,
+            videoIds=[video_id],
+            duplicates=False,
+        )
+    except Exception as e:
+        return False, f"Error API al agregar: {e}"
+
+    if isinstance(respuesta, str):
+        if "SUCCEEDED" in respuesta:
+            return True, None
+        return False, f"Estatus no exitoso: {respuesta}"
+
+    if not isinstance(respuesta, dict):
+        return False, f"Respuesta inesperada: {type(respuesta).__name__}"
+
+    status = str(respuesta.get("status", ""))
+    if "SUCCEEDED" in status:
+        return True, None
+
+    # Si YouTube devuelve mensajes legibles en un toast, los mostramos.
+    mensajes = []
+    for item in respuesta.get("actions", []):
+        if not isinstance(item, dict):
+            continue
+        add_toast = item.get("addToToastAction", {})
+        runs = (
+            add_toast.get("item", {})
+            .get("notificationActionRenderer", {})
+            .get("responseText", {})
+            .get("runs", [])
+        )
+        if runs:
+            mensajes.append("".join(t.get("text", "") for t in runs).strip())
+
+    detalle = " | ".join(m for m in mensajes if m)
+    if detalle:
+        return False, f"{status or 'SIN_STATUS'}: {detalle}"
+    return False, f"Estatus no exitoso: {status or 'SIN_STATUS'}"
