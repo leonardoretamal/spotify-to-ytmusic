@@ -7,7 +7,7 @@
 
  Autor: b0nfire
  Fecha: 2026-02-28
- version: 1.2
+ version: 1.3
 
  REQUISITOS:
    - Python 3.8 o superior

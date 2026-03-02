@@ -11,13 +11,105 @@ from .spotify_client import (
     obtener_canciones_spotify,
     obtener_info_playlist,
 )
-from .utils import formato_tiempo_estimado, guardar_canciones_no_encontradas
+from .utils import (
+    extraer_playlist_id,
+    formato_tiempo_estimado,
+    guardar_canciones_no_encontradas,
+    guardar_reporte_migracion,
+)
 from .youtube_client import (
     agregar_cancion_a_playlist,
     buscar_en_youtube,
     conectar_youtube,
     crear_playlist_yt,
 )
+
+
+def _pedir_playlist_spotify():
+    while True:
+        valor = input(
+            "👉 Ingresa la URL (o ID) de la playlist de Spotify que deseas migrar: "
+        ).strip()
+        if not valor:
+            print("   ⚠️ Este dato es obligatorio. Intenta nuevamente.")
+            continue
+
+        playlist_id = extraer_playlist_id(valor)
+        if not playlist_id:
+            print("   ⚠️ URL/ID invalido. Ejemplo valido:")
+            print("      https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M")
+            continue
+
+        return valor, playlist_id
+
+
+def _pedir_nombre_playlist_youtube():
+    while True:
+        valor = input("👉 Ingresa el nombre para la playlist en YouTube Music: ").strip()
+        if valor:
+            return valor
+        print("   ⚠️ El nombre no puede estar vacio. Intenta nuevamente.")
+
+
+def _normalizar_privacidad_youtube(valor):
+    valor_limpio = valor.strip().lower()
+    if valor_limpio in ("", "privada", "private"):
+        return "PRIVATE", "privada"
+    if valor_limpio in ("publica", "pública", "public"):
+        return "PUBLIC", "publica"
+    if valor_limpio in ("no listada", "oculta", "unlisted"):
+        return "UNLISTED", "no listada"
+    return None, None
+
+
+def _pedir_privacidad_youtube():
+    print("👉 Visibilidad de la playlist en YouTube Music:")
+    print("   - privada (por defecto)")
+    print("   - no listada")
+    print("   - publica")
+
+    while True:
+        entrada = input(
+            "   Escribe una opcion y presiona ENTER (si dejas vacio sera privada): "
+        )
+        privacidad_api, privacidad_legible = _normalizar_privacidad_youtube(entrada)
+        if privacidad_api:
+            return privacidad_api, privacidad_legible
+        print("   ⚠️ Opcion invalida. Usa: privada, no listada o publica.")
+
+
+def _ofrecer_reintento_por_cache():
+    while True:
+        respuesta = input(
+            "\n¿Deseas borrar '.spotify_cache' y reintentar una vez? [S/n]: "
+        ).strip().lower()
+        if respuesta in ("", "s", "si", "sí", "y", "yes"):
+            if os.path.exists(".spotify_cache"):
+                os.remove(".spotify_cache")
+                print("   ✅ Archivo '.spotify_cache' eliminado.")
+            else:
+                print("   ℹ️ No existia '.spotify_cache'. Se reintentara igualmente.")
+            return True
+        if respuesta in ("n", "no"):
+            return False
+        print("   ⚠️ Respuesta invalida. Escribe S o N.")
+
+
+def _spotify_error_reintento(error_type):
+    return error_type in ("spotify_forbidden", "spotify_unauthorized")
+
+
+def _limpiar_archivos_obsoletos():
+    archivos_obsoletos = ["errores_migracion.txt"]
+    eliminados = []
+    for archivo in archivos_obsoletos:
+        if os.path.exists(archivo):
+            os.remove(archivo)
+            eliminados.append(archivo)
+    if eliminados:
+        print("   🧹 Limpieza automatica: se eliminaron archivos obsoletos:")
+        for archivo in eliminados:
+            print(f"      - {archivo}")
 
 
 def migrar():
@@ -35,12 +127,11 @@ def migrar():
     # ----------------------------------------------------------
     print("📋 Paso 1: Cargando configuracion...")
     load_dotenv()
+    _limpiar_archivos_obsoletos()
 
     client_id = os.getenv("SPOTIFY_CLIENT_ID")
     client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
     redirect_uri = os.getenv("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
-    playlist_url = os.getenv("SPOTIFY_PLAYLIST_URL")
-    nombre_playlist_yt = os.getenv("YOUTUBE_PLAYLIST_NAME", "Mi Playlist de Spotify")
     yt_client_id = os.getenv("YOUTUBE_CLIENT_ID")
     yt_client_secret = os.getenv("YOUTUBE_CLIENT_SECRET")
 
@@ -50,68 +141,102 @@ def migrar():
     if not client_secret or client_secret == "tu_client_secret_aqui":
         print("❌ ERROR: No has configurado el SPOTIFY_CLIENT_SECRET en el archivo .env")
         sys.exit(1)
-    if not playlist_url or "TU_PLAYLIST_ID_AQUI" in playlist_url:
-        print("❌ ERROR: No has configurado la SPOTIFY_PLAYLIST_URL en el archivo .env")
-        sys.exit(1)
 
     print("   ✅ Configuracion cargada correctamente")
 
     # ----------------------------------------------------------
-    # PASO 2: Conectar con Spotify y obtener playlist
+    # PASO 2: Pedir datos obligatorios por CLI
     # ----------------------------------------------------------
-    sp = conectar_spotify(client_id, client_secret, redirect_uri)
+    print("\n🧾 Paso 2: Datos de migracion (ingresados por ti)...")
+    playlist_url, playlist_id = _pedir_playlist_spotify()
+    nombre_playlist_yt = _pedir_nombre_playlist_youtube()
+    privacidad_yt_api, privacidad_yt_legible = _pedir_privacidad_youtube()
 
-    from .utils import extraer_playlist_id
-
-    playlist_id = extraer_playlist_id(playlist_url)
-
-    if not playlist_id:
-        print(f"❌ ERROR: No se pudo extraer el ID de la playlist desde: {playlist_url}")
-        sys.exit(1)
-
-    info_playlist = obtener_info_playlist(sp, playlist_id)
+    print()
+    print("ℹ️ Aviso importante antes de continuar con Spotify:")
+    print(
+        "   La playlist debe ser tuya o debes ser co-creador/colaborador"
+        " con permisos reales de acceso."
+    )
+    print("   Si Spotify devuelve 403 real, el script te explicara como corregirlo.")
 
     # ----------------------------------------------------------
-    # PASO 3: Obtener todas las canciones de Spotify
+    # PASO 3 y 4: Conectar con Spotify y obtener datos
     # ----------------------------------------------------------
-    resultado_spotify = obtener_canciones_spotify(sp, playlist_id)
+    intento_spotify = 0
+    max_intentos_spotify = 2
+    info_playlist = None
+    canciones = []
 
-    if not resultado_spotify.get("ok"):
-        error_type = resultado_spotify.get("error_type")
-        if error_type == "spotify_forbidden":
-            print("❌ No se pudieron leer las canciones por permisos/autorizacion (403).")
-        else:
-            mensaje = resultado_spotify.get("error_message") or "Sin detalle"
-            print(f"❌ No se pudieron obtener canciones de Spotify: {mensaje}")
-        sys.exit(1)
+    while intento_spotify < max_intentos_spotify:
+        intento_spotify += 1
+        sp = conectar_spotify(client_id, client_secret, redirect_uri)
 
-    canciones = resultado_spotify.get("canciones", [])
+        resultado_info = obtener_info_playlist(sp, playlist_id)
+        if not resultado_info.get("ok"):
+            error_type = resultado_info.get("error_type")
+            if _spotify_error_reintento(error_type) and intento_spotify < max_intentos_spotify:
+                print(
+                    "\n⚠️ Spotify devolvio un error de autorizacion/permisos "
+                    f"({error_type})."
+                )
+                if _ofrecer_reintento_por_cache():
+                    continue
+            print("❌ No se pudo obtener informacion de la playlist de Spotify.")
+            sys.exit(1)
+        info_playlist = resultado_info.get("info")
+
+        resultado_spotify = obtener_canciones_spotify(sp, playlist_id)
+        if not resultado_spotify.get("ok"):
+            error_type = resultado_spotify.get("error_type")
+            if _spotify_error_reintento(error_type) and intento_spotify < max_intentos_spotify:
+                print(
+                    "\n⚠️ Spotify devolvio un error de autorizacion/permisos "
+                    f"({error_type})."
+                )
+                if _ofrecer_reintento_por_cache():
+                    continue
+            if error_type == "spotify_forbidden":
+                print("❌ No se pudieron leer las canciones por permisos/autorizacion (403).")
+            else:
+                mensaje = resultado_spotify.get("error_message") or "Sin detalle"
+                print(f"❌ No se pudieron obtener canciones de Spotify: {mensaje}")
+            sys.exit(1)
+
+        canciones = resultado_spotify.get("canciones", [])
+        break
 
     if len(canciones) == 0:
         print("⚠️ La playlist existe pero no tiene canciones para migrar.")
         sys.exit(1)
 
     # ----------------------------------------------------------
-    # PASO 4: Conectar con YouTube Music
+    # PASO 5: Conectar con YouTube Music
     # ----------------------------------------------------------
-    print("\n🔗 Paso 4: Conectando con YouTube Music...")
+    print("\n🔗 Paso 5: Conectando con YouTube Music...")
     ytmusic = conectar_youtube(yt_client_id, yt_client_secret)
 
     # ----------------------------------------------------------
-    # PASO 5: Crear la playlist en YouTube Music
+    # PASO 6: Crear la playlist en YouTube Music
     # ----------------------------------------------------------
-    print(f"\n📝 Paso 5: Creando playlist '{nombre_playlist_yt}' en YouTube Music...")
+    print(
+        f"\n📝 Paso 6: Creando playlist '{nombre_playlist_yt}' "
+        f"({privacidad_yt_legible}) en YouTube Music..."
+    )
     fecha_hoy = datetime.now().strftime("%d/%m/%Y")
     desc_original = (
         f"Playlist migrada desde Spotify el {fecha_hoy}. "
         f"Original: '{info_playlist['name']}' por {info_playlist['owner']['display_name']}."
     )
-    playlist_yt_id = crear_playlist_yt(ytmusic, nombre_playlist_yt, desc_original)
+    playlist_yt_id = crear_playlist_yt(
+        ytmusic, nombre_playlist_yt, desc_original, privacidad_yt_api
+    )
+    link_playlist_youtube = f"https://music.youtube.com/playlist?list={playlist_yt_id}"
 
     # ----------------------------------------------------------
-    # PASO 6: Buscar y agregar cada cancion
+    # PASO 7: Buscar y agregar cada cancion
     # ----------------------------------------------------------
-    print("\n🔍 Paso 6: Buscando y agregando canciones en YouTube Music...")
+    print("\n🔍 Paso 7: Buscando y agregando canciones en YouTube Music...")
 
     segundos_por_cancion = 2
     tiempo_estimado_segundos = len(canciones) * segundos_por_cancion
@@ -120,10 +245,10 @@ def migrar():
     print(f"   Esto puede tomar un rato con {len(canciones)} canciones...")
     print(f"   (Tiempo estimado: ~{tiempo_estimado_formato})\n")
 
-    canciones_encontradas = []
+    canciones_agregadas = []
     canciones_no_encontradas = []
-    canciones_no_agregadas = []
-    errores = []
+    canciones_ya_existian = []
+    canciones_error_api = []
 
     bar_format = (
         "   {desc}: {percentage:3.0f}%|{bar}| "
@@ -138,93 +263,117 @@ def migrar():
             try:
                 intentos = 0
                 max_intentos = 3
-                agregada = False
+                procesada = False
 
-                while intentos < max_intentos and not agregada:
+                while intentos < max_intentos and not procesada:
                     try:
                         video_id = buscar_en_youtube(ytmusic, nombre, artista)
                         if video_id:
                             barra.write(
                                 f"      +) Agregando a YT: {artista} - {nombre} (ID: {video_id})"
                             )
-                            agregada_ok, motivo = agregar_cancion_a_playlist(
+                            estado_agregado, motivo = agregar_cancion_a_playlist(
                                 ytmusic, playlist_yt_id, video_id
                             )
-                            if agregada_ok:
-                                canciones_encontradas.append(cancion)
-                                agregada = True
+                            if estado_agregado == "agregada":
+                                canciones_agregadas.append(cancion)
+                                procesada = True
+                            elif estado_agregado == "ya_existia":
+                                canciones_ya_existian.append(
+                                    {
+                                        **cancion,
+                                        "motivo": motivo or "La cancion ya estaba en la playlist.",
+                                    }
+                                )
+                                barra.write(
+                                    "      ℹ️ Ya existia en la playlist: "
+                                    f"{artista} - {nombre}"
+                                )
+                                procesada = True
                             else:
                                 cancion_con_motivo = {
                                     **cancion,
-                                    "motivo": motivo or "YouTube no confirmo la insercion.",
+                                    "motivo": motivo
+                                    or "Error API al insertar en YouTube Music.",
                                 }
-                                canciones_no_agregadas.append(cancion_con_motivo)
+                                canciones_error_api.append(cancion_con_motivo)
                                 barra.write(
-                                    "      ⚠️ Encontrada pero no agregada: "
+                                    "      ❌ Error API al agregar: "
                                     f"{artista} - {nombre} ({cancion_con_motivo['motivo']})"
                                 )
-                                break
+                                procesada = True
                         else:
                             canciones_no_encontradas.append(cancion)
-                            break
+                            procesada = True
                     except Exception as e_api:
                         intentos += 1
                         if intentos == max_intentos:
                             barra.write(f"      ❌ API Error final tras reintentos: {str(e_api)}")
-                            errores.append(
+                            canciones_error_api.append(
                                 {
                                     **cancion,
-                                    "error": f"Intento {intentos}: {str(e_api)}",
+                                    "motivo": f"Intento {intentos}: {str(e_api)}",
                                 }
                             )
+                            procesada = True
                         else:
                             time.sleep(2)
 
             except Exception as e:
-                errores.append({**cancion, "error": str(e)})
+                canciones_error_api.append({**cancion, "motivo": str(e)})
 
             barra.update(1)
             time.sleep(1)
 
     # ----------------------------------------------------------
-    # PASO 7: Mostrar reporte final
+    # PASO 8: Mostrar reporte final
     # ----------------------------------------------------------
     print("\n")
     print("=" * 60)
     print("  📊 REPORTE FINAL DE MIGRACION")
     print("=" * 60)
     print()
+    print(f"  📁 Playlist origen (Spotify):          {info_playlist['name']}")
+    print(f"  🔗 Link Spotify:                        {playlist_url}")
+    print(f"  📁 Playlist destino (YouTube Music):   {nombre_playlist_yt}")
+    print(f"  🔗 Link YouTube Music:                  {link_playlist_youtube}")
+    print()
     print(f"  🎵 Total de canciones en Spotify:     {len(canciones)}")
-    print(f"  ✅ Encontradas y agregadas a YouTube:  {len(canciones_encontradas)}")
-    print(f"  ❌ No encontradas:                     {len(canciones_no_encontradas)}")
-    print(f"  ⚠️  Encontradas pero NO agregadas:     {len(canciones_no_agregadas)}")
-    if errores:
-        print(f"  ⚠️  Errores al agregar:                {len(errores)}")
+    print(f"  ✅ agregadas:                          {len(canciones_agregadas)}")
+    print(f"  ❌ no_encontradas:                     {len(canciones_no_encontradas)}")
+    print(f"  ℹ️ ya_existian:                        {len(canciones_ya_existian)}")
+    print(f"  ⚠️ error_api:                          {len(canciones_error_api)}")
     print()
 
-    porcentaje = (len(canciones_encontradas) / len(canciones)) * 100
+    porcentaje = (len(canciones_agregadas) / len(canciones)) * 100
     print(f"  📈 Porcentaje de exito: {porcentaje:.1f}%")
 
     print()
     print("=" * 60)
 
-    pendientes = canciones_no_encontradas + canciones_no_agregadas
+    pendientes = canciones_no_encontradas + canciones_error_api
     if pendientes:
         guardar_canciones_no_encontradas(pendientes)
 
-    if errores:
-        with open("errores_migracion.txt", "w", encoding="utf-8") as f:
-            f.write("ERRORES DURANTE LA MIGRACION\n")
-            f.write(f"Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            for err in errores:
-                f.write(f"Cancion: {err['artista']} - {err['nombre']}\n")
-                f.write(f"Error: {err['error']}\n\n")
-        print("\n📝 Detalle de errores guardado en: errores_migracion.txt")
+    archivo_reporte = "reporte_migracion_spotify_a_youtube.txt"
+    guardar_reporte_migracion(
+        archivo=archivo_reporte,
+        playlist_spotify_nombre=info_playlist["name"],
+        playlist_spotify_url=playlist_url,
+        playlist_youtube_nombre=nombre_playlist_yt,
+        playlist_youtube_url=link_playlist_youtube,
+        total_spotify=len(canciones),
+        agregadas=canciones_agregadas,
+        no_encontradas=canciones_no_encontradas,
+        ya_existian=canciones_ya_existian,
+        error_api=canciones_error_api,
+    )
+    print(f"\n📝 Reporte detallado guardado en: {archivo_reporte}")
 
     print()
     print("🎉 ¡Migracion completada!")
     print("   Abre YouTube Music O haz clic en este enlace:")
-    print(f"   👉 https://music.youtube.com/playlist?list={playlist_yt_id} 👈")
+    print(f"   👉 {link_playlist_youtube} 👈")
     print()
 
 
