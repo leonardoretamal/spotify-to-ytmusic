@@ -1,4 +1,4 @@
-# 🎶 Guía Paso a Paso: Migrar Spotify a YouTube Music
+﻿# 🎶 Guía Paso a Paso: Migrar Spotify a YouTube Music
 
 Esta guía te explica **todo desde cero** para migrar tus canciones de Spotify a YouTube Music. No necesitas saber programar.
 
@@ -8,31 +8,33 @@ Esta guía te explica **todo desde cero** para migrar tus canciones de Spotify a
 
 1. Instalar Python (el lenguaje del script)
 2. Instalar las dependencias del script
-3. Crear credenciales de Spotify (gratuito)
-4. Crear credenciales de YouTube (gratuito)
-5. Autenticarte en YouTube Music
-6. Configurar el script con tus datos
-7. Ejecutar el script y esperar 🎉
+3. Crear credenciales de Spotify (gratis)
+4. Elegir método de autenticación de YouTube Music:
+   - Browser Auth con `headers.txt` (recomendado)
+   - OAuth con Google Cloud (opcional)
+5. Configurar el archivo `.env` (solo credenciales)
+6. Ejecutar el script y responder preguntas por terminal
+7. Revisar el reporte final detallado
 
-**Tiempo estimado de preparación:** 15-20 minutos  
+**Tiempo estimado de preparación:** 15-25 minutos  
 **Tiempo de migración:** ~2 segundos por canción (1000 canciones ≈ 35 minutos)
 
 ---
 
 ## Paso 1: Instalar Python
 
-Python es el lenguaje de programación que usa nuestro script. Necesitas instalarlo una vez.
+Python es el lenguaje de programación que usa nuestro script. Necesitas instalarlo una sola vez.
 
 ### En Windows:
 
 1. Ve a **[python.org/downloads](https://www.python.org/downloads/)**
-2. Haz clic en el botón amarillo **"Download Python 3.x.x"**
+2. Haz clic en **"Download Python 3.x.x"**
 3. Abre el archivo descargado (`.exe`)
-4. **⚠️ MUY IMPORTANTE:** Marca la casilla **"Add Python to PATH"** (está abajo en la ventana del instalador)
+4. **MUY IMPORTANTE:** marca **"Add Python to PATH"**
 5. Haz clic en **"Install Now"**
 6. Espera a que termine y cierra
 
-### Verificar que se instaló correctamente:
+### Verificar instalación
 
 1. Abre la **Terminal** (busca "cmd" o "PowerShell" en el menú inicio)
 2. Escribe este comando y presiona Enter:
@@ -55,7 +57,7 @@ python --version
 
 **Método alternativo:** Abre PowerShell/CMD y navega con:
 
-```
+```bash
 cd ruta\a\la\carpeta\Script_Spotify_playlist_to_youtube
 ```
 
@@ -64,9 +66,8 @@ cd ruta\a\la\carpeta\Script_Spotify_playlist_to_youtube
 ## Paso 3: Crear un entorno virtual (recomendado)
 
 Un entorno virtual es como una "burbuja" que mantiene las librerías del script separadas del resto de tu computadora. No es obligatorio pero sí recomendable.
-
 ```bash
-# Crear el entorno virtual
+# Crear entorno
 python -m venv venv
 
 # Activarlo (Windows PowerShell)
@@ -79,25 +80,26 @@ python -m venv venv
 > **💡 Sabrás que está activado** si ves `(venv)` al inicio de la línea en la terminal.
 
 > **⚠️ Si PowerShell da error de permisos**, ejecuta esto primero:
->
-> ```
-> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-> ```
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
 
 ---
 
-## Paso 4: Instalar las dependencias
+## Paso 4: Instalar dependencias
 
 Con la terminal abierta en la carpeta del proyecto (y el entorno virtual activado si lo creaste), ejecuta:
 
-```
+```bash
 pip install -r requirements.txt
-o
-python -m pip install -r requirements.txt
-
 ```
 
-Esto instalará automáticamente todas las librerías necesarias. Espera a que termine (puede tomar 1-2 minutos).
+Si `pip` falla:
+
+```bash
+python -m pip install -r requirements.txt
+```
 
 ---
 
@@ -105,13 +107,13 @@ Esto instalará automáticamente todas las librerías necesarias. Espera a que t
 
 Necesitamos credenciales para que el script pueda leer tu playlist. Es gratuito.
 
-### 5.1 — Crear cuenta de desarrollador
+### 5.1 Crear cuenta de desarrollador
 
 1. Ve a **[developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)**
 2. Inicia sesión con tu cuenta de Spotify (la misma de siempre)
 3. Si es la primera vez, acepta los términos de uso
 
-### 5.2 — Crear una aplicación
+### 5.2 Crear aplicación
 
 1. Haz clic en **"Create app"** (o "Crear aplicación")
 2. Completa los campos:
@@ -121,7 +123,7 @@ Necesitamos credenciales para que el script pueda leer tu playlist. Es gratuito.
    - **Which API/SDKs are you planning to use?:** Selecciona **Web API**
 3. Marca la casilla de los términos y haz clic en **"Save"**
 
-### 5.3 — Obtener tus credenciales
+### 5.3 Obtener credenciales
 
 1. En la página de tu app, haz clic en **"Settings"** (Configuración)
 2. Verás tu **Client ID** — cópialo
@@ -139,8 +141,10 @@ Necesitamos credenciales para que el script pueda leer tu playlist. Es gratuito.
 > 2. Asegúrate de haber iniciado sesión con tu cuenta principal (no una "Cuenta de Marca").
 
 Existen dos métodos para autenticarse con YouTube Music. Te recomendamos el **Método 1 (Browser Auth)** porque es el más rápido, más seguro y evita el conocido error `HTTP 400 Bad Request`.
+## Método 1: Browser Auth con `headers.txt` (RECOMENDADO)
 
-### Método 1: Browser Auth (RECOMENDADO ⭐)
+Es más rápido para la mayoría de usuarios.
+_(Nota: Puedes no crear el headers.txt inmediatamente ya que el script al momento de ejecutarlo a traves de cli te ayudara paso a paso a obtener y crear este archivo)._
 
 No necesitas crear un proyecto en Google Cloud. Solo necesitas extraer tus "headers" de red desde el navegador:
 
@@ -157,9 +161,9 @@ No necesitas crear un proyecto en Google Cloud. Solo necesitas extraer tus "head
 11. Pega lo que copiaste y guarda el archivo. El script convertirá estos datos automáticamente.
     _(Nota: Si usas este método, en el Paso 7 puedes dejar los campos de YOUTUBE_CLIENT_ID en blanco o con cualquier texto, ya no se usarán)._
 
----
+El script convertirá `headers.txt` en `browser.json` automáticamente.
 
-### Método 2: OAuth desde Google Cloud (Alternativa)
+## Método 2: OAuth con Google Cloud (OPCIONAL)
 
 Si prefieres usar la API oficial, debes seguir estos pasos (no funciona con Cuentas de Marca/Canales Secundarios):
 
@@ -195,16 +199,10 @@ SPOTIFY_CLIENT_ID=abc123tuClientIdReal
 # Pega aquí tu Client Secret de Spotify (del paso 5.3)
 SPOTIFY_CLIENT_SECRET=xyz789tuClientSecretReal
 
-# Pega la URL de tu playlist de Spotify
-SPOTIFY_PLAYLIST_URL=https://open.spotify.com/playlist/tu_playlist_id
-
-# El nombre que quieres para la playlist en YouTube Music
-YOUTUBE_PLAYLIST_NAME=Mi Música de Spotify
-
-# Pega aquí tu ID de Cliente de YouTube (del paso 6.4)
+# Pega aquí tu ID de Cliente de YouTube (del paso 6 método 2)
 YOUTUBE_CLIENT_ID=abc123tuClientIdReal.apps.googleusercontent.com
 
-# Pega aquí tu Secreto de Cliente de YouTube (del paso 6.4)
+# Pega aquí tu Secreto de Cliente de YouTube (del paso 6 método 2)
 YOUTUBE_CLIENT_SECRET=xyz789tuClientSecretReal
 ```
 
@@ -217,113 +215,120 @@ YOUTUBE_CLIENT_SECRET=xyz789tuClientSecretReal
 ## Paso 8: Ejecutar el script
 
 ¡Ya estamos listos! Ejecuta el script con:
-
-```
+```bash
 python migrar_spotify_a_youtube.py
 ```
 
-### ¿Qué va a pasar?
+### El script te pedirá por terminal
 
-1. **Conexión a Spotify** — El script leerá todas las canciones de tu playlist
-2. **Autenticación de YouTube Music** — La primera vez se abrirá tu navegador:
-   - Selecciona tu cuenta de Google (la que usas en YouTube Music)
-   - Autoriza la aplicación
-   - Se guardará la autenticación en `oauth.json` para la próxima vez
-3. **Creación de playlist** — Se creará una nueva playlist privada en YouTube Music
-4. **Migración** — El script buscará cada canción y la agregará automáticamente
-5. **Reporte** — Al final verás un resumen con cuántas canciones se migraron
+1. URL o ID de playlist Spotify (**obligatorio**)
+2. Nombre de playlist YouTube Music (**obligatorio**)
+3. Privacidad de playlist YouTube:
+   - `privada` (si dejas vacío, esta es la opción por defecto)
+   - `no listada`
+   - `publica`
 
-### Ejemplo de cómo se ve:
+Si dejas URL o nombre vacío, el script volverá a preguntarte.
 
-```
-============================================================
-  🎶 MIGRADOR DE SPOTIFY A YOUTUBE MUSIC 🎶
-============================================================
+### Aviso de permisos Spotify (muy importante)
 
-📋 Paso 1: Cargando configuración...
-   ✅ Configuración cargada correctamente
+La playlist de Spotify debe cumplir al menos una condición:
+1. Es tuya
+2. Eres co-creador/colaborador con permisos reales
 
-🔗 Paso 2: Conectando con Spotify...
-   ✅ Playlist encontrada: 'Mi playlist favorita'
+Si no, Spotify puede responder `403`.
 
-📥 Paso 3: Descargando lista de canciones...
-   📊 Total de canciones: 1042
-   Descargando de Spotify: 100%|████████████| 1042/1042
+### ¿Qué pasa con `.spotify_cache`?
 
-🔍 Paso 6: Buscando y agregando canciones...
-   Migrando: 45%|██████░░░░░░░| 469/1042
-```
+- No se borra en cada ejecución
+- Solo si Spotify devuelve `401/403`, el script te preguntará si deseas borrar `.spotify_cache` y reintentar una vez
+- Esto evita logins repetidos cuando no son necesarios
 
----
+### ¿Qué pasa si no existe `headers.txt`?
 
-## Paso 9: Revisar los resultados
+Si no existe `headers.txt` (y tampoco `browser.json`), el script:
+1. Te avisa en terminal
+2. Te muestra mini guía para obtener `headers.txt`
+3. Espera a que lo crees
+4. Continúa automáticamente
 
-Cuando termine, el script te mostrará un reporte como este:
-
-```
-============================================================
-  📊 REPORTE FINAL DE MIGRACIÓN
-============================================================
-
-  🎵 Total de canciones en Spotify:     1042
-  ✅ Encontradas y agregadas:            987
-  ❌ No encontradas:                      55
-
-  📈 Porcentaje de éxito: 94.7%
-============================================================
-```
-
-### ¿Qué hago con las canciones no encontradas?
-
-Las canciones que no se pudieron encontrar automáticamente se guardan en el archivo **`canciones_no_encontradas.txt`**. Puedes:
-
-1. Abrir ese archivo
-2. Buscar cada canción manualmente en YouTube Music
-3. Agregarla a tu playlist manualmente
-
-> **💡** Es normal que un 5-10% de las canciones no se encuentren. Puede ser porque el título es diferente en YouTube Music o porque simplemente no está disponible.
+También puedes escribir `omitir` para seguir con OAuth si ya lo configuraste.
 
 ---
 
-## ❓ Preguntas Frecuentes
+## Paso 9: Revisar resultados
 
-### "El script se detuvo a la mitad, ¿pierdo el progreso?"
+Al finalizar, verás reporte en terminal con 4 categorías:
 
-No. Las canciones que ya se agregaron a YouTube Music siguen ahí. Puedes ejecutar el script de nuevo y las canciones duplicadas no se agregarán dos veces.
+1. `agregadas`
+2. `no_encontradas`
+3. `ya_existian`
+4. `error_api`
+
+También se generan archivos:
+
+1. `reporte_migracion_spotify_a_youtube.txt`  
+   Incluye contexto (playlist origen/destino, links, resumen y detalle por categoría)
+2. `canciones_no_encontradas.txt`  
+   Lista de canciones pendientes para revisión manual
+
+---
+
+## ❓ Preguntas frecuentes
+
+### "El script se detuvo a la mitad, ¿pierdo progreso?"
+
+No. Lo que ya se agregó a YouTube Music permanece agregado.
 
 ### "¿Puedo migrar varias playlists?"
 
-Sí. Cambia la `SPOTIFY_PLAYLIST_URL` y el `YOUTUBE_PLAYLIST_NAME` en el archivo `.env` y ejecuta el script de nuevo.
+Sí. Ejecuta de nuevo el script y responde nuevos datos en CLI.
 
-### "¿Puedo migrar mis 'me gusta' de Spotify?"
+### "¿Puedo seguir usando OAuth en vez de headers.txt?"
 
-Este script está diseñado para playlists específicas. Para los "me gusta" necesitarías otra configuración de autenticación (OAuth de Spotify), que es más compleja.
+Sí. Puedes usar Browser Auth o OAuth. Ambas rutas siguen disponibles.
 
-### "Error: No se reconoce python"
+### "Error 403 en Spotify"
 
-Asegúrate de haber marcado "Add Python to PATH" durante la instalación. Si no lo hiciste, desinstala Python y vuelve a instalarlo marcando esa casilla.
+Revisa esto:
 
-### "Error al conectar con YouTube Music"
+1. La playlist es tuya o eres colaborador real
+2. Estás con la cuenta Spotify correcta
+3. Si el script lo ofrece, acepta regenerar `.spotify_cache`
 
-- Elimina el archivo `oauth.json`
-- Ejecuta el script de nuevo
-- Se abrirá el navegador para que te autentiques de nuevo
+### "Error 429 (Too Many Requests)"
 
-### "Error 429 o 'Too Many Requests'"
-
-El script tiene pausas para evitar esto, pero si sucede, espera unos minutos y ejecuta el script de nuevo.
+Espera unos minutos y vuelve a ejecutar.
 
 ---
 
 ## 📁 Archivos del proyecto
 
-| Archivo                        | Descripción                                           |
-| ------------------------------ | ----------------------------------------------------- |
-| `migrar_spotify_a_youtube.py`  | El script principal                                   |
-| `requirements.txt`             | Lista de librerías necesarias                         |
-| `.env.ejemplo`                 | Plantilla de configuración                            |
-| `.env`                         | **Tu** configuración (la creas tú en el paso 6)       |
-| `GUIA_PASO_A_PASO.md`          | Esta guía                                             |
-| `.gitignore`                   | Protege tus archivos secretos                         |
-| `oauth.json`                   | Se crea automáticamente al autenticar YouTube         |
-| `canciones_no_encontradas.txt` | Se crea al finalizar (si hay canciones sin encontrar) |
+| Archivo | Descripción |
+| --- | --- |
+| `migrar_spotify_a_youtube.py` | Script principal |
+| `src/main.py` | Flujo principal y prompts CLI |
+| `src/spotify_client.py` | Lectura de Spotify y manejo de errores 401/403 |
+| `src/youtube_client.py` | Conexión YouTube (Browser Auth/OAuth) |
+| `.env.ejemplo` | Plantilla de configuración |
+| `.env` | Tus credenciales privadas |
+| `headers.txt` | Headers manuales (Browser Auth) |
+| `browser.json` | Generado desde `headers.txt` |
+| `oauth.json` | Sesión OAuth (si eliges OAuth) |
+| `.spotify_cache` | Cache de sesión Spotify |
+| `reporte_migracion_spotify_a_youtube.txt` | Reporte final completo |
+| `canciones_no_encontradas.txt` | Canciones no encontradas |
+
+---
+
+## 🔒 Seguridad básica
+
+Nunca compartas públicamente estos archivos:
+
+- `.env`
+- `headers.txt`
+- `browser.json`
+- `oauth.json`
+- `.spotify_cache`
+
+Contienen datos sensibles de autenticación.

@@ -6,6 +6,7 @@ headers.txt
 
 # Canciones no encontradas.
 canciones_no_encontradas.txt
+reporte_migracion_spotify_a_youtube.txt
 
 # Archivo de autenticación de YouTube Music
 oauth.json

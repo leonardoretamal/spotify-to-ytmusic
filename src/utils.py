@@ -86,3 +86,68 @@ def formato_tiempo_estimado(segundos):
         return f"{m}m {s}s"
     else:
         return f"{s}s"
+
+
+def guardar_reporte_migracion(
+    archivo,
+    playlist_spotify_nombre,
+    playlist_spotify_url,
+    playlist_youtube_nombre,
+    playlist_youtube_url,
+    total_spotify,
+    agregadas,
+    no_encontradas,
+    ya_existian,
+    error_api,
+):
+    """
+    Guarda un reporte consolidado de migracion con contexto y categorias finales.
+    """
+    total_agregadas = len(agregadas)
+    porcentaje = (total_agregadas / total_spotify * 100) if total_spotify > 0 else 0.0
+
+    with open(archivo, "w", encoding="utf-8") as f:
+        f.write("=" * 70 + "\n")
+        f.write(" REPORTE FINAL DE MIGRACION SPOTIFY -> YOUTUBE MUSIC\n")
+        f.write("=" * 70 + "\n")
+        f.write(f" Fecha: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+
+        f.write(" CONTEXTO\n")
+        f.write("-" * 70 + "\n")
+        f.write(f" Playlist Spotify: {playlist_spotify_nombre}\n")
+        f.write(f" Link Spotify: {playlist_spotify_url}\n")
+        f.write(f" Playlist YouTube Music: {playlist_youtube_nombre}\n")
+        f.write(f" Link YouTube Music: {playlist_youtube_url}\n\n")
+
+        f.write(" RESUMEN\n")
+        f.write("-" * 70 + "\n")
+        f.write(f" Total de canciones en Spotify: {total_spotify}\n")
+        f.write(f" agregadas: {len(agregadas)}\n")
+        f.write(f" no_encontradas: {len(no_encontradas)}\n")
+        f.write(f" ya_existian: {len(ya_existian)}\n")
+        f.write(f" error_api: {len(error_api)}\n")
+        f.write(f" Porcentaje de exito: {porcentaje:.1f}%\n\n")
+
+        _escribir_bloque_canciones(f, "AGREGADAS", agregadas)
+        _escribir_bloque_canciones(f, "NO_ENCONTRADAS", no_encontradas)
+        _escribir_bloque_canciones(f, "YA_EXISTIAN", ya_existian)
+        _escribir_bloque_canciones(f, "ERROR_API", error_api)
+
+
+def _escribir_bloque_canciones(file_obj, titulo, canciones):
+    file_obj.write(f" {titulo}\n")
+    file_obj.write("-" * 70 + "\n")
+    if not canciones:
+        file_obj.write(" (sin elementos)\n\n")
+        return
+
+    for i, cancion in enumerate(canciones, 1):
+        artista = cancion.get("artista", "Desconocido")
+        nombre = cancion.get("nombre", "Desconocido")
+        album = cancion.get("album", "Desconocido")
+        motivo = cancion.get("motivo") or cancion.get("error")
+        file_obj.write(f"{i:4d}. {artista} - {nombre}\n")
+        file_obj.write(f"      Album: {album}\n")
+        if motivo:
+            file_obj.write(f"      Motivo: {motivo}\n")
+        file_obj.write("\n")
